@@ -1,0 +1,189 @@
+﻿@page "/orderDetails"
+@page "/orderDetails/{id:int}"
+@inject IProductCategoryService ProductCategoryService
+@inject IProductService ProductService
+@inject IClientService ClientService
+@inject IOrderService OrderService
+@inject IDialogService DialogService
+@inject NavigationManager NavigationManager
+@attribute [Authorize]
+
+<p>@Message</p>
+
+@if (clients != null && Order != null)
+{
+<EditForm Model="@Order" OnValidSubmit="SaveOrder">
+    <div class="card">
+        <h5 class="card-header">Order Details</h5>
+        <div class="card-body">
+            <div class="container">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <input type="submit" class="btn btn-success" value="Save" />
+                        <input type="button" class="btn btn-secondary" value="Cancel" @onclick="Cancel" />
+                    </div>
+                    <div class="col-md-4 mb-3">
+
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="">Number</label>
+                        <InputNumber class="form-control" @bind-Value="@Order.OrderNumber" />
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="">Order Date</label>
+                        <InputDate class="form-control" @bind-Value="@Order.OrderDate" />
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <label for="">Client</label>
+                        <InputSelect class="form-control" @bind-Value="@Order.ClientId">
+                            @foreach (var item in clients)
+                                {
+                                <option value="@item.Id">@(item.LastName + ", " + item.FirstName)</option>
+                                }
+                        </InputSelect>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="">Delivery Date</label>
+                        <InputDate class="form-control" @bind-Value="@Order.DeliveryDate" />
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="">Total</label>                        
+                        <input type="text" class="form-control" readonly="readonly" value="@Order.Total.ToString("C")" />
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <input type="button" class="btn btn-secondary" value="Add Product" @onclick="AddProduct" />
+                    </div>
+                    <div class="col-md-4 mb-3">
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (Order.Products != null && Order.Products.Any())
+    {        
+        <MudTable Items="@Order.Products" Hover="true" Breakpoint="Breakpoint.Sm">
+            <ToolBarContent>
+                <MudText Typo="Typo.h6">Products</MudText>
+            </ToolBarContent>
+            <HeaderContent>
+                <MudTh>Name</MudTh>
+                <MudTh>Price</MudTh>
+                <MudTh>Quantity</MudTh>
+                <MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate Context="ProductContext">
+                <MudTd DataLabel="Name">@ProductContext.Name</MudTd>
+                <MudTd DataLabel="Price">@ProductContext.Price</MudTd>
+                <MudTd DataLabel="Quantity">@ProductContext.Quantity</MudTd>
+                <MudTd DataLabel="">
+                    <MudFab OnClick="@(() => RemoveProduct(ProductContext.Id))"
+                            Color="Color.Secondary"
+                            Icon="@Icons.Material.Filled.Delete"
+                            Size="Size.Small"
+                            IconSize="Size.Small">
+                    </MudFab>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+
+</EditForm>
+}
+else
+{
+    <p>Loading...</p>
+}
+
+
+@code {
+
+    public Order Order;
+    public IEnumerable<Client> clients;
+    public string Message { get; set; }
+
+    [Parameter] public int id { get; set; }
+
+    protected async override Task OnInitializedAsync()
+    {
+        try
+        {
+
+            if (id > 0)
+            {
+                Order = await OrderService.GetDetails(id);
+            }
+            else
+            {
+                Order = new Order()
+                {
+                    OrderNumber = await OrderService.GetNextNumber(),
+                    ProductCategoryId = 1,
+                    OrderDate = DateTime.Today,
+                    DeliveryDate = DateTime.Today.AddDays(7)
+                };
+            }
+
+            clients = await ClientService.GetAll();
+        }
+        catch (Exception e)
+        {
+            Message = "There was an error..." + e.Message;
+        }
+    }
+
+
+    protected async Task SaveOrder()
+    {
+        await OrderService.SaveOrder(Order);
+        NavigateToHome();
+    }
+
+    private void NavigateToHome()
+    {
+        NavigationManager.NavigateTo("/");
+    }
+
+    protected void Cancel()
+    {
+        NavigateToHome();
+    }
+
+    protected async Task AddProduct()
+    {
+        var dialog = DialogService.Show<ProductDetails>("Product Details");
+        var result = await dialog.Result;
+
+        if (!result.Cancelled)
+        {
+            var product = (Product)result.Data;
+
+            if (Order.Products == null)
+                Order.Products = new List<Product>();
+
+            Order.Products.Add(product);
+        }
+    }
+
+    protected async Task RemoveProduct(int productId)
+    {
+        Order.Products.RemoveAll(p => p.Id == productId);
+    }
+}
